@@ -15,21 +15,21 @@ const web = new WebClient(SLACK_TOKEN);
 let DATA;
 
 // user-defined function
-// function notInclude (data, updatedData) {
-//   const dataId = data.map(message => {
-//     return message.id;
-//   });
-//   const updatedId = updatedData.map(message => {
-//     return message.id;
-//   });
-//   return [dataId.filter(element => {
-//     return !updatedId.includes(element);
-//   }), dataId.filter(element => {
-//     return !updatedId.includes(element);
-//   })];
-// }
+function findChannelChanges (data, updatedData) {
+  const dataId = data.map(message => {
+    return message.id;
+  });
+  const updatedId = updatedData.map(message => {
+    return message.id;
+  });
+  return [ updatedId.filter(element => {
+    return !dataId.includes(element);
+  }), dataId.filter(element => {
+    return !updatedId.includes(element);
+  })];
+}
 function compare (data, updatedData) {
-  return data.ts === updatedData.ts;
+  return data === updatedData;
 }
 function getDataFromDB (query) {
   return new Promise(function (resolve, reject) {
@@ -42,8 +42,16 @@ function getDataFromDB (query) {
     });
   });
 }
-function checkMessage (data, updatedData) {
-  return data.ts !== updatedData.ts;
+function insertDB (data) {
+  return new Promise((resolve, reject) => {
+    db.insert(data, function (err, data) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(data);
+      }
+    });
+  });
 }
 function updateDB (query, data) {
   return new Promise((resolve, reject) => {
@@ -67,24 +75,48 @@ async function check () {
   });
 
   for (const channel of channels.channels) {
-    updatedData.push(Object({ id: channel.id, name: channel.name, message: (await web.conversations.history({ channel: channel.id, limit: 1 })).messages[0] }));
+    updatedData.push(Object({ id: channel.id, name: channel.name, ts: (await web.conversations.history({ channel: channel.id, limit: 1 })).messages[0].ts }));
+  }
+
+  // first index : Channel to add
+  // second index : Channel to remove
+  if (DATA.length !== updatedData.length) {
+    const channelChanges = findChannelChanges(DATA, updatedData);
+    if (channelChanges[0].length) {
+      const channelToAdd = channelChanges[0].map(id => {
+        return updatedData.filter(channel => {
+          return channel.id === id;
+        })[0];
+      });
+      await insertDB(channelToAdd).catch(err => {
+        console.log('An error occured:', err);
+      });
+    }
+    if (channelChanges[1].length) {
+      for (const remove of channelChanges[1]) {
+        db.remove({ id: remove }, err => {
+          if (err) {
+            console.log('An error occured:', err);
+          }
+        });
+      }
+    }
   }
 
   for (const dataMessage of DATA) {
     for (const updatedMessage of updatedData) {
       status = compare(dataMessage.id, updatedMessage.id);
       if (status) {
-        changed = checkMessage(dataMessage.message, updatedMessage.message);
+        changed = !compare(dataMessage.ts, updatedMessage.ts);
         if (changed) {
-          console.log(`${dataMessage.id}, ${dataMessage.name}, ${changed}, ${updatedMessage.message.ts}`);
-          updateDB({ id: dataMessage.id }, { $set: { message: updatedMessage.message } }).catch(err => {
-            console.log(err);
+          console.log(`${dataMessage.id}, ${dataMessage.name}, ${changed}, ${updatedMessage.ts}`);
+          updateDB({ id: dataMessage.id }, { $set: { message: updatedMessage.ts } }).catch(err => {
+            console.log('An error occured:', err);
           });
         } else {
-          console.log(`${dataMessage.id}, ${dataMessage.name}, ${changed}, ${dataMessage.message.ts}`);
+          console.log(`${dataMessage.id}, ${dataMessage.name}, ${changed}, ${dataMessage.ts}`);
         }
       }
-      break;
     }
   }
 }
@@ -96,14 +128,12 @@ async function initialize () {
   for (const channel of channels.channels) {
     saveToDB.push(Object({ id: channel.id,
       name: channel.name,
-      message: (await web.conversations.history({ channel: channel.id, limit: 1 }).catch(err => {
+      ts: (await web.conversations.history({ channel: channel.id, limit: 1 }).catch(err => {
         console.log('An error occurred:', err);
-      })).messages[0] }));
+      })).messages[0].ts }));
   }
-  db.insert(saveToDB, function (err) {
-    if (err) {
-      console.log(err);
-    }
+  db.insert(saveToDB, err => {
+    console.log('An error occured:', err);
   });
 }
 
