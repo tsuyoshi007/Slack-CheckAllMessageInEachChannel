@@ -27,6 +27,7 @@ For Example:
 ```bash
 node server.js
 ```
+Expected output: channel_id(string),channel_name(string),is_there_msg(boolean),last_message_ts(string)
 
 
 ### And coding style tests
