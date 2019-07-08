@@ -28,8 +28,8 @@ function findChannelChanges (data, updatedData) {
     return !updatedId.includes(element);
   })];
 }
-function compare (data, updatedData) {
-  return data === updatedData;
+function compare (a, b) {
+  return a === b;
 }
 function getDataFromDB (query) {
   return new Promise(function (resolve, reject) {
@@ -110,7 +110,7 @@ async function check () {
         changed = !compare(dataMessage.ts, updatedMessage.ts);
         if (changed) {
           console.log(`${dataMessage.id}, ${dataMessage.name}, ${changed}, ${updatedMessage.ts}`);
-          updateDB({ id: dataMessage.id }, { $set: { message: updatedMessage.ts } }).catch(err => {
+          updateDB({ id: dataMessage.id }, { $set: { ts: updatedMessage.ts } }).catch(err => {
             console.log('An error occured:', err);
           });
         } else {
@@ -133,7 +133,9 @@ async function initialize () {
       })).messages[0].ts }));
   }
   db.insert(saveToDB, err => {
-    console.log('An error occured:', err);
+    if (err) {
+      console.log('An error occured:', err);
+    }
   });
 }
 
