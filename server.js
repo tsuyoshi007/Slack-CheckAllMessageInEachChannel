@@ -75,7 +75,9 @@ async function check () {
   });
 
   for (const channel of channels.channels) {
-    updatedData.push(Object({ id: channel.id, name: channel.name, ts: (await web.conversations.history({ channel: channel.id, limit: 1 })).messages[0].ts }));
+    if (!channel.is_archived) {
+      updatedData.push(Object({ id: channel.id, name: channel.name, ts: (await web.conversations.history({ channel: channel.id, limit: 1 })).messages[0].ts }));
+    }
   }
 
   // first index : Channel to add
@@ -126,11 +128,13 @@ async function initialize () {
     console.log(err);
   });
   for (const channel of channels.channels) {
-    saveToDB.push(Object({ id: channel.id,
-      name: channel.name,
-      ts: (await web.conversations.history({ channel: channel.id, limit: 1 }).catch(err => {
-        console.log('An error occurred:', err);
-      })).messages[0].ts }));
+    if (!channel.is_archived) {
+      saveToDB.push(Object({ id: channel.id,
+        name: channel.name,
+        ts: (await web.conversations.history({ channel: channel.id, limit: 1 }).catch(err => {
+          console.log('An error occurred:', err);
+        })).messages[0].ts }));
+    }
   }
   db.insert(saveToDB, err => {
     if (err) {
@@ -146,7 +150,7 @@ async function start () {
   if (!DATA.length) {
     initialize();
   } else {
-    check();
+    check(); // cron starter should be here here
   }
 }
 
