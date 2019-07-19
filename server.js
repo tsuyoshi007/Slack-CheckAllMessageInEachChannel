@@ -53,6 +53,17 @@ function insertDB (data) {
     });
   });
 }
+function removeDB (query) {
+  return new Promise((resolve, reject) => {
+    db.remove(query, {}, function (err, removed) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(removed);
+      }
+    });
+  });
+}
 function updateDB (query, data) {
   return new Promise((resolve, reject) => {
     db.update(query, data, (err, updated) => {
@@ -77,6 +88,16 @@ async function check () {
   for (const channel of channels.channels) {
     if (!channel.is_archived) {
       updatedData.push(Object({ id: channel.id, name: channel.name, ts: (await web.conversations.history({ channel: channel.id, limit: 1 })).messages[0].ts }));
+    }
+  }
+
+  let archivedChannels = channels.channels.filter(channel => {
+    return channel.is_archived;
+  });
+
+  if (archivedChannels.length) {
+    for (const channel of archivedChannels) {
+      removeDB({ id: channel.id }).catch(err => { console.log(err); });
     }
   }
 
